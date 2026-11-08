@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: deals_bigdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../sql/synthetic.sql:/docker-entrypoint-initdb.d/02-synthetic.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d deals_bigdata && psql -U postgres -d deals_bigdata -tAc 'SELECT CASE WHEN count(*) > 0 THEN 1 ELSE 0 END FROM prices' | grep -qx 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 240
+
+  pipeline:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: deals_bigdata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      START_DATE: "2020-01-01"
+      END_DATE: "2027-12-31"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "on-failure:5"
+
+volumes:
+  pgdata:
